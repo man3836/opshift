@@ -1,0 +1,33 @@
+echo "--------------"
+echo "working......."
+echo "--------------"
+yum install centos-release-openshift-origin -y >> /dev/null 2>&1 
+yum install wget git net-tools bind-utils iptables-services bridge-utils bash-completion origin-clients -y >> /dev/null 2>&1 
+yum install docker -y >> /dev/null 2>&1 
+
+sed -i '/OPTIONS=.*/c\OPTIONS="--selinux-enabled --insecure-registry 172.30.0.0/16"' /etc/sysconfig/docker
+systemctl is-active docker
+systemctl enable docker
+systemctl start docker
+
+/bin/cat << EOF >>  /etc/containers/registries.conf
+[registries.insecure]
+registries = ['172.30.0.0/16']
+EOF
+
+systemctl daemon-reload
+systemctl restart docker
+docker network inspect -f "{{range .IPAM.Config }}{{ .Subnet }}{{end}}" bridge
+
+firewall-cmd --permanent --new-zone dockerc
+firewall-cmd --permanent --zone dockerc --add-source 172.17.0.0/16
+firewall-cmd --permanent --zone dockerc --add-port 8443/tcp
+firewall-cmd --permanent --zone dockerc --add-port 53/udp
+firewall-cmd --permanent --zone dockerc --add-port 8053/udp
+firewall-cmd --reload
+
+oc cluster up
+IP="$(hostname -I)"
+echo " acces https://$IP:8443"
+echo "system:admin"
+
